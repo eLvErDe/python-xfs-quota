@@ -52,6 +52,21 @@ class ProjectQuota(NamedTuple):
     grace: str
 
 
+class XfsPrjQuotaNoSpace(Exception):
+    """
+    Raised when requested quota cannot be fulfilled
+
+    :param message: Exception error message
+    :type message: str
+    :param max_available_bytes: Maximum available bytes on this storage
+    :type max_available_bytes: int
+    """
+
+    def __init__(self, message: str, max_available_bytes: int) -> None:
+        super().__init__(message)
+        self.max_available_bytes = max_available_bytes
+
+
 class XfsPrjQuota:
     """
     Class to handle XFS filesystems project (folder) quota in Python
@@ -214,7 +229,7 @@ class XfsPrjQuota:
         used_ids = self.list_proj_quota().keys()
         return max(used_ids) + 1
 
-    def set_quota_for_proj_id(self, proj_id: int, soft: Optional[int] = None, hard: Optional[int] = None) -> None:
+    def set_quota_for_proj_id(self, proj_id: int, soft: Optional[int] = None, hard: Optional[int] = None, safe_space: bool = True) -> None:
         """
         Set soft/hard quotas for given project_id
 
@@ -226,14 +241,34 @@ class XfsPrjQuota:
         :type soft: int, defaults to None
         :param hard: Assign given hard quota (bytes)
         :type hard: int, defaults to None
+        :param safe_space: Set to True if you want to check there is enough free space (reserved quota taken in account too)
+        :type safe_space: bool, defaults to True
+        :raises XfsPrjQuotaNoSpace: If safe_space == True but request quota exceed available non reserved space
         """
 
         assert isinstance(proj_id, int) and proj_id >= 0, "proj_id parameter must be a positive or zero integer"
         assert soft is None or (isinstance(soft, int) and soft > 0), "soft parameter must be a positive integer or None"
         assert hard is None or (isinstance(hard, int) and hard > 0), "hard parameter must be a positive integer or None"
+        assert safe_space is True or safe_space is False, "safe_space parameter must be True or False"
 
         valid_soft = 0 if soft is None else soft
         valid_hard = 0 if hard is None else hard
+
+        if safe_space:
+            free_space = psutil.disk_usage(self.mnt_point).free
+            self.logger.info("free_space: %d", free_space)
+            reserved_by_quotas = sum([max(x.soft, x.hard) for x in self.list_proj_quota().values()])
+            self.logger.info("reserved_by_quotas: %d", reserved_by_quotas)
+            available_space = free_space - reserved_by_quotas
+
+            if valid_soft > available_space:
+                err_msg = "Cannot allocate %d bytes soft quota, max available is %d bytes" % (valid_soft, available_space)
+                self.logger.error(err_msg)
+                raise XfsPrjQuotaNoSpace(err_msg, max_available_bytes=available_space)
+            if valid_hard > available_space:
+                err_msg = "Cannot allocate %d bytes soft quota, max available is %d bytes" % (valid_hard, available_space)
+                self.logger.error(err_msg)
+                raise XfsPrjQuotaNoSpace(err_msg, max_available_bytes=available_space)
 
         cmd = [self.xfs_quota, "-x", "-c", "limit -p bsoft=%d bhard=%d %d" % (valid_soft, valid_hard, proj_id), str(self.mnt_point)]
         subprocess.check_call(cmd)
