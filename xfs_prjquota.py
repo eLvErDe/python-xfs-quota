@@ -285,4 +285,15 @@ if __name__ == "__main__":
         quota_details = QUOTA.list_proj_quota()
         pprint(quota_details)
 
+        # Remove completely a quota and release used projectId
+        # Yes you need to do this, otherwise projectId never get released
+        folder_1_path = os.path.join(MNT_POINT, TEST_FOLDERS[1][0])
+        folder_1_proj_id = QUOTA.get_proj_id_for_path(folder_1_path)
+        QUOTA.set_proj_id_for_path(folder_1_path, 0)
+        QUOTA.set_quota_for_proj_id(folder_1_proj_id, soft=None, hard=None)
+        print("Folder %s and project id %d have been released" % (folder_1_path, folder_1_proj_id))
+
+        quota_details = QUOTA.list_proj_quota()
+        pprint(quota_details)
+
     test_sync()
