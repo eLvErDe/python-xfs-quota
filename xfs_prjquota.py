@@ -52,7 +52,7 @@ class ProjectQuota(NamedTuple):
     grace: str
 
 
-class XfsProjQuota:
+class XfsPrjQuota:
     """
     Class to handle XFS filesystems project (folder) quota in Python
 
@@ -252,7 +252,7 @@ if __name__ == "__main__":
     MNT_POINT = os.environ.get("TEST_MNT_POINT", None)
     assert MNT_POINT is not None, "Please call this script with TEST_MNT_POINT environment variable set"
 
-    QUOTA = XfsProjQuota(MNT_POINT)
+    QUOTA = XfsPrjQuota(MNT_POINT)
     TEST_FOLDERS = [
         ("python_xfs_quota_001", 1, 15),
         ("python_xfs_quota_002", 2, 99),
