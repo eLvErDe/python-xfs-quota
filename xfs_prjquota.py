@@ -92,9 +92,9 @@ class XfsPrjQuota:
 
         mounted = psutil.disk_partitions()
         target_mounted = [x for x in mounted if x.mountpoint == str(self.mnt_point)]
-        assert target_mounted, "mount_point (%s) does not seems to be mounted" % self.mnt_point
-        assert target_mounted[0].fstype == "xfs", "mount_point (%s) is not an XFS partition" % self.mnt_point
-        assert "prjquota" in target_mounted[0].opts.split(","), "mount_point (%s) is not mounted with prjquota options" % self.mnt_point
+        assert target_mounted, "mount_point %s does not seems to be mounted" % self.mnt_point
+        assert target_mounted[0].fstype == "xfs", "mount_point %s is not an XFS partition" % self.mnt_point
+        assert "prjquota" in target_mounted[0].opts.split(","), "mount_point %s is not mounted with prjquota options" % self.mnt_point
 
     def get_proj_id_for_path(self, path: Union[str, pathlib.Path]) -> int:
         """
