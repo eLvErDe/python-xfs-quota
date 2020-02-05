@@ -229,6 +229,26 @@ class XfsPrjQuota:
         used_ids = self.list_proj_quota().keys()
         return max(used_ids) + 1
 
+    def raise_not_enough_space(self, quota: int) -> None:
+        """
+        Raise exception if requested quota cannot be fulfilled
+
+        :param quota: Quota to verify in bytes (0 or positive integer)
+        :type quota: int
+        :raises XfsPrjQuotaNoSpace: If requested quota exceed available non reserved space
+        """
+
+        assert quota is None or (isinstance(quota, int) and quota >= 0), "quota parameter must be a positive integer or zero"
+
+        free_space = psutil.disk_usage(self.mnt_point).free
+        reserved_by_quotas = sum([max(x.soft, x.hard) for x in self.list_proj_quota().values()])
+        available_space = free_space - reserved_by_quotas
+
+        if quota > available_space:
+            err_msg = "Cannot allocate %d bytes soft quota, max available is %d bytes" % (quota, available_space)
+            self.logger.error(err_msg)
+            raise XfsPrjQuotaNoSpace(err_msg, max_available_bytes=available_space)
+
     def set_quota_for_proj_id(self, proj_id: int, soft: Optional[int] = None, hard: Optional[int] = None, safe_space: bool = True) -> None:
         """
         Set soft/hard quotas for given project_id
@@ -255,20 +275,8 @@ class XfsPrjQuota:
         valid_hard = 0 if hard is None else hard
 
         if safe_space:
-            free_space = psutil.disk_usage(self.mnt_point).free
-            self.logger.info("free_space: %d", free_space)
-            reserved_by_quotas = sum([max(x.soft, x.hard) for x in self.list_proj_quota().values()])
-            self.logger.info("reserved_by_quotas: %d", reserved_by_quotas)
-            available_space = free_space - reserved_by_quotas
-
-            if valid_soft > available_space:
-                err_msg = "Cannot allocate %d bytes soft quota, max available is %d bytes" % (valid_soft, available_space)
-                self.logger.error(err_msg)
-                raise XfsPrjQuotaNoSpace(err_msg, max_available_bytes=available_space)
-            if valid_hard > available_space:
-                err_msg = "Cannot allocate %d bytes soft quota, max available is %d bytes" % (valid_hard, available_space)
-                self.logger.error(err_msg)
-                raise XfsPrjQuotaNoSpace(err_msg, max_available_bytes=available_space)
+            self.raise_not_enough_space(valid_soft)
+            self.raise_not_enough_space(valid_hard)
 
         cmd = [self.xfs_quota, "-x", "-c", "limit -p bsoft=%d bhard=%d %d" % (valid_soft, valid_hard, proj_id), str(self.mnt_point)]
         subprocess.check_call(cmd)
